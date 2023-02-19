@@ -5,7 +5,7 @@ from collections import namedtuple
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-from rdt.transformers import ClusterBasedNormalizer, OneHotEncoder
+from ctgain.rdt_modified.transformers import ClusterBasedNormalizer, OneHotEncoder
 
 #### added mask to the named touple
 
@@ -49,7 +49,7 @@ class DataTransformer_with_masking_nas(object):
         """
         column_name = data.columns[0]
         mask=data.isnull()
-        gm = ClusterBasedNormalizer(model_missing_values=True, max_clusters=min(len(data), 10))
+        gm = ClusterBasedNormalizer(model_missing_values=False, max_clusters=min(len(data), 10))
         gm.fit(data, column_name)
         num_components = sum(gm.valid_component_indicator)
 
