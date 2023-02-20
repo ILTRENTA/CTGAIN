@@ -8,7 +8,7 @@ import torch
 from packaging import version
 from torch import optim
 from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential, functional
-
+import torch.nn as nn
 from ctgain.data_sampler import DataSampler
 
 from ctgain.data_transformer import DataTransformer_with_masking_nas as DataTransformer
@@ -19,15 +19,21 @@ from ctgain.utils_ctgain import *
 
 from ctgain.ctgan.synthesizers.base import BaseSynthesizer, random_state
 
+np.random.seed(0)
+torch.manual_seed(0)
 
 class Discriminator(Module):
     """Discriminator for the CTGAN."""
 
-    def __init__(self, input_dim, discriminator_dim, device, pac=10):
+    def __init__(self, input_dim, discriminator_dim, device, pac=10, h_dim=32,hint_rate=.7):
         super(Discriminator, self).__init__()
         self._device=device
         dim = input_dim * pac * 2 #include the mask vector 
         self.pac = pac
+        self.hint_rate=.7
+
+        self.h_dim=h_dim
+        self.uniform = torch.distributions.Uniform(low=0, high=1.)
         self.pacdim = dim
         seq = []
         for item in list(discriminator_dim):
@@ -81,10 +87,11 @@ class Residual(Module):
     def forward(self, input_):
         """Apply the Residual layer to the `input_`."""
         
-
+        print(1)
         out = self.fc(input_)
         out = self.bn(out)
         out = self.relu(out)
+        print(" output ", out.shape, " input ",input_.shape)
         return torch.cat([out, input_], dim=1)
 
 
@@ -96,21 +103,59 @@ class Generator(Module):
         self._device=device
         self.seed_sampler = torch.distributions.Uniform(low=0, high=0.01)
         self.h_dim = embedding_dim
-        dim = embedding_dim *2 # include the mask vector 
-        seq = []
-        for item in list(generator_dim):
-            seq += [Residual(dim, item)]
-            dim += item
-        seq.append(Linear(dim, data_dim))
-        self.seq = Sequential(*seq)
+        print("line 99 --- > embedding dims: ", embedding_dim)
+
+        dim = data_dim # include the mask vector
+
+        
+        # seq = [Residual(dim, data_dim*2)]
+
+        i=0
+        # for item in list(generator_dim):
+        #     seq += [Residual(dim , item)]
+        #     print( dim , item)
+        #     dim += item
+        dim
+        ## beginning trapianto 
+
+        generator = [Residual(dim * 2, dim)]
+        # generator = [Residual(dim, dim)]
+        # generator = [Residual(dim , dim)]
+        
+        generator.extend([Residual(dim+dim+dim, dim)])
+        generator.extend([Residual(dim*4, dim)])
+
+        generator.extend([Linear( dim*5,  dim)])
+
+        for layer in generator:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_normal_(layer.weight)
+                nn.init.zeros_(layer.bias)
+
+        self.seq = Sequential(*generator)
+
+
+        # ## end trapianto
+        # seq+=[Residual(dim, data_dim)]
+
+        # # i+=1
+        
+        # seq.append(Linear(dim, data_dim))
+
+        print( "line 117 eccolo ", (dim , data_dim))
+        print(i)
+        # self.seq = Sequential(*seq)
 
     def forward(self, input_, mask):
         """Apply the Generator to the `input_`."""
         data_norm=input_
 
         data_norm[mask==0]=0
-
-        z = self.seed_sampler.sample([data_norm.shape[0], self.h_dim]).to(self._device)
+        print("line 114 ---> data norm shape: ", data_norm.shape)
+        z = self.seed_sampler.sample([data_norm.shape[0], data_norm.shape[1]]).to(self._device)
+        # z = self.seed_sampler.sample([data_norm.shape[0], self.h_dim]).to(self._device)
+        
+        print("line 116 ----> z shape: ", z.shape)
         random_combined = mask * data_norm + (1-mask) * z
         sample = self.seq(torch.cat([random_combined, mask], dim=1))
         x_hat = random_combined * mask + sample * (1-mask)
@@ -196,7 +241,7 @@ class CTGAIN(BaseSynthesizer):
         elif isinstance(cuda, str):
             device = cuda
         else:
-            device = 'cuda'
+            device = 'cpu' ######################################################### HERE
 
         self._device = torch.device(device)
 
@@ -342,6 +387,7 @@ class CTGAIN(BaseSynthesizer):
             self._log_frequency)
 
         data_dim = self._transformer.output_dimensions
+        print("line 363 ---> data_dim ", data_dim)
 
         self._generator = Generator(
             self._embedding_dim + self._data_sampler.dim_cond_vec(),
