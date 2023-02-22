@@ -48,7 +48,7 @@ class DataTransformer_with_masking_nas(object):
                 A ``ColumnTransformInfo`` object.
         """
         column_name = data.columns[0]
-        mask=data.isnull()
+        mask=data.notnull()
         gm = ClusterBasedNormalizer(model_missing_values=False, max_clusters=min(len(data), 10))
         gm.fit(data, column_name)
         num_components = sum(gm.valid_component_indicator)
@@ -71,7 +71,7 @@ class DataTransformer_with_masking_nas(object):
                 A ``ColumnTransformInfo`` object.
         """
         column_name = data.columns[0]
-        mask=data.isnull()
+        mask=data.notnull()
         ohe = OneHotEncoder()
         ohe.fit(data, column_name)
         num_categories = len(ohe.dummies)
@@ -138,7 +138,14 @@ class DataTransformer_with_masking_nas(object):
 
     def _transform_discrete(self, column_transform_info, data):
         ohe = column_transform_info.transform
-        return ohe.transform(data).to_numpy()
+        mask_col=column_transform_info.mask.to_numpy().flatten()
+        mask_vect_trans=np.zeros(output.shape)
+
+        mask_vect_trans[mask_col==1, :]=1
+        mask_vect_trans
+
+        output=ohe.transform(data).to_numpy()
+        return output, mask_vect_trans
 
     def _synchronous_transform(self, raw_data, column_transform_info_list):
         """Take a Pandas DataFrame and transform columns synchronous.
@@ -157,7 +164,10 @@ class DataTransformer_with_masking_nas(object):
                 mask_list.append(mask)
 
             else:
-                column_data_list.append(self._transform_discrete(column_transform_info, data))
+                out, mask=self._transform_discrete(column_transform_info, data)
+
+                column_data_list.append(out)
+                mask_list.append(mask)
 
         return column_data_list,  mask_list
 
@@ -166,6 +176,7 @@ class DataTransformer_with_masking_nas(object):
 
         Outputs a list with Numpy arrays.
         """
+        
         processes = []
         for column_transform_info in column_transform_info_list:
             column_name = column_transform_info.column_name
@@ -193,11 +204,11 @@ class DataTransformer_with_masking_nas(object):
                 self._column_transform_info_list
             )
         else:
-            column_data_list = self._parallel_transform(
+            data_list = self._parallel_transform(
                 raw_data,
                 self._column_transform_info_list
             )
-
+        column_data_list, mask_list=zip(*data_list)
         return np.concatenate(column_data_list, axis=1).astype(float), np.concatenate(mask_list, axis=1).astype(int)
 
     def _inverse_transform_continuous(self, column_transform_info, column_data, sigmas, st):
