@@ -25,7 +25,7 @@ torch.manual_seed(0)
 class Discriminator(Module):
     """Discriminator for the CTGAN."""
 
-    def __init__(self, input_dim, discriminator_dim, device, pac=10, h_dim=32,hint_rate=.7):
+    def __init__(self, input_dim, discriminator_dim, device, pac=10, h_dim=32,hint_rate=.8):
         super(Discriminator, self).__init__()
         self._device=device
         dim = input_dim * pac * 2 #include the mask vector 
@@ -41,7 +41,7 @@ class Discriminator(Module):
             dim = item
         seq += [Linear(dim, dim), LeakyReLU(.2), Dropout(.5)]
 
-        seq += [Linear(dim, 74)]
+        seq += [Linear(dim, input_dim), nn.Sigmoid()]# before was set to 74
         self.seq = Sequential(*seq)
 
     def calc_gradient_penalty(self, real_data, fake_data, device='cpu', pac=10, lambda_=10):
@@ -69,13 +69,13 @@ class Discriminator(Module):
         """Apply the Discriminator to the `input_`."""
         assert input_.size()[0] % self.pac == 0
         x_hat=input_
-        print(input_.shape)
+        # print(input_.shape)
         hint = (self.uniform.sample([mask.shape[0], mask.shape[1]]) < self.hint_rate).float().to(self._device)
         hint = mask * hint ## the size of the hint matrix is wrong 
         
         
         inp = torch.cat([x_hat, hint], dim=1)
-        print( "#### 78 ####line ----->",inp.view(-1, self.pacdim).shape)
+        # print( "#### 78 ####line ----->",inp.view(-1, self.pacdim).shape)
         
         return self.seq(inp)#.view(-1, self.pacdim))
         #return self.seq(input_.view(-1, self.pacdim))
@@ -90,14 +90,18 @@ class Residual(Module):
         self.bn = BatchNorm1d(o)
         self.relu = ReLU()
 
-    def forward(self, input_):
+    def forward(self, input_, pred=False):
         """Apply the Residual layer to the `input_`."""
         
-        print(1)
+        # print(1)
+        if pred:
+            print(input_.dtype)
+            input_=input_.to(torch.float64)
+
         out = self.fc(input_)
         out = self.bn(out)
         out = self.relu(out)
-        print(" output ", out.shape, " input ",input_.shape)
+        # print(" output ", out.shape, " input ",input_.shape)
         return torch.cat([out, input_], dim=1)
 
 
@@ -109,7 +113,7 @@ class Generator(Module):
         self._device=device
         self.seed_sampler = torch.distributions.Uniform(low=0, high=0.01)
         self.h_dim = embedding_dim
-        print("line 99 --- > embedding dims: ", embedding_dim)
+        # print("line 99 --- > embedding dims: ", embedding_dim)
 
         dim = data_dim # include the mask vector
 
@@ -148,27 +152,52 @@ class Generator(Module):
         
         # seq.append(Linear(dim, data_dim))
 
-        print( "line 117 eccolo ", (dim , data_dim))
-        print(i)
+        # print( "line 117 eccolo ", (dim , data_dim))
+        # print(i)
         # self.seq = Sequential(*seq)
 
-    def forward(self, input_, mask):
+    def forward(self, input_, mask, pred=False):
         """Apply the Generator to the `input_`."""
         data_norm=input_
 
         data_norm[mask==0]=0
         # mask=torch.from_numpy(mask).to(self._device)
-        print("line 114 ---> data norm shape: ", data_norm.shape)
+        # print("line 114 ---> data norm shape: ", data_norm.shape)
         z = self.seed_sampler.sample([data_norm.shape[0], data_norm.shape[1]]).to(self._device)
         # z = self.seed_sampler.sample([data_norm.shape[0], self.h_dim]).to(self._device)
         
-        print("line 116 ----> z shape: ", z.shape)
-        print( type(mask), type(z))
+        # print("line 116 ----> z shape: ", z.shape)
+        # print( type(mask), type(z))
         
         # mask=torch.from_numpy(mask).to(self._device)
-
+        # if mask.shape[0] != z.shape[0]:
+        #     mask=mask.repeat(z.shape[0], 1)
+        #     print( mask.shape, z.shape)
+        # if type(mask)==np.ndarray:
+        #     mask=torch.from_numpy(mask).to(self._device)                     
+    
         random_combined = mask * data_norm + (1-mask) * z
-        sample = self.seq(torch.cat([random_combined, mask], dim=1))
+        # if type(random_combined)==np.ndarray:
+        #     print( type(random_combined), type(mask))
+        #     random_combined=torch.from_numpy(random_combined).to(self._device)
+        #     mask=torch.from_numpy(mask).to(self._device)
+        # if random_combined.dtype!= mask.dtype:
+        #     random_combined=random_combined.type(mask.dtype)
+
+        if pred:
+            print("line 129 ----> random combined shape: ", random_combined.dtype)
+            print("line 130 ----> mask shape: ", mask.dtype)
+            mask=mask.to(torch.float32)
+            random_combined=random_combined.to(torch.float32)
+            print("line 130 ----> mask shape: ", mask.dtype)
+
+        xoxo=torch.cat([random_combined, mask], dim=1)
+        if pred:
+
+            sample = self.seq(xoxo)
+        
+        else: 
+            sample = self.seq(xoxo)
         x_hat = random_combined * mask + sample * (1-mask)
         # data = self.seq(input_)
 
@@ -228,11 +257,13 @@ class CTGAIN(BaseSynthesizer):
     def __init__(self, embedding_dim=128, generator_dim=(256, 256), discriminator_dim=(256, 256),
                  generator_lr=2e-4, generator_decay=1e-6, discriminator_lr=2e-4,
                  discriminator_decay=1e-6, batch_size=500, discriminator_steps=1,
-                 log_frequency=True, verbose=False, epochs=300, pac= 1, cuda=True):
+                 log_frequency=True, verbose=False, epochs=300, pac= 2, 
+                 alpha=.8, hint_rate=.8, cuda=True):
 
         assert batch_size % 2 == 0
 
-        self.alpha=.8
+        self.alpha=alpha
+        self.hint_rate=hint_rate
 
         self._embedding_dim = embedding_dim
         self._generator_dim = generator_dim
@@ -378,6 +409,7 @@ class CTGAIN(BaseSynthesizer):
                 contain the integer indices of the columns. Otherwise, if it is
                 a ``pandas.DataFrame``, this list should contain the column names.
         """
+        from tqdm import tqdm
         self._validate_discrete_columns(train_data, discrete_columns)
 
         if epochs is None:
@@ -403,7 +435,7 @@ class CTGAIN(BaseSynthesizer):
             self._log_frequency)
 
         data_dim = self._transformer.output_dimensions
-        print("line 363 ---> data_dim ", data_dim)
+        # print("line 363 ---> data_dim ", data_dim)
 
         self._generator = Generator(
             self._embedding_dim + self._data_sampler.dim_cond_vec(),
@@ -411,11 +443,11 @@ class CTGAIN(BaseSynthesizer):
             data_dim, self._device
         ).to(self._device)
 
-       
+        
         discriminator = Discriminator(
             data_dim + self._data_sampler.dim_cond_vec(),
             self._discriminator_dim, self._device,
-            pac=self.pac
+            pac=self.pac, hint_rate=self.hint_rate
         ).to(self._device)
 
         optimizerG = optim.Adam(
@@ -432,9 +464,11 @@ class CTGAIN(BaseSynthesizer):
         std = mean + 1
 
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
-        for i in range(epochs):
+        first=True
+        for i in tqdm(range(epochs)):
+            
             for id_ in range(steps_per_epoch):
-
+                
                 for n in range(self._discriminator_steps):
                     fakez = torch.normal(mean=mean, std=std)
 
@@ -442,7 +476,7 @@ class CTGAIN(BaseSynthesizer):
                     if condvec is None:
                         c1, m1, col, opt = None, None, None, None
                         real, mask_samp = self._data_sampler.sample_data(self._batch_size, col, opt)
-                        print("cond 1 ")
+                        # print("cond 1 ")
                     else:
                         c1, m1, col, opt = condvec
                         c1 = torch.from_numpy(c1).to(self._device)
@@ -454,7 +488,7 @@ class CTGAIN(BaseSynthesizer):
                         real, mask_samp = self._data_sampler.sample_data(
                             self._batch_size, col[perm], opt[perm])
                         c2 = c1[perm]
-                        print("cond 2")
+                        # print("cond 2")
                         # real, mask_samp= torch.from_numpy(real.astype('float32')).to(self._device),\
                         #     torch.from_numpy(mask_samp).to(self._device)
                     # fake = self._generator(fakez, mask_samp) # for now 
@@ -480,10 +514,22 @@ class CTGAIN(BaseSynthesizer):
 
                     # pen = discriminator.calc_gradient_penalty(
                     #     real_cat, fake_cat, self._device, self.pac)
-                    print("dprob --- >",d_prob.shape)
-                    print("mask_samp ---->", mask_samp.shape)
-                    loss_d = -torch.mean(mask_samp*torch.log(d_prob+1e-8) - (1-mask_samp)*torch.log(1-d_prob + 1e-8))
+                    # print("dprob --- >",d_prob.shape)
+                    # print("mask_samp ---->", mask_samp.shape)
+                    if first:
+                        print("real_cat ---->", real_cat)
+                        print("fake_cat ---->", fake_cat)
+                        print("d_prob ---->", d_prob)
+                        print("mask_samp ---->", mask_samp)
+                        print( torch.log(d_prob+1e-7))
+                        first=False
+                        # print( "d_prob ---->", d_prob)
 
+                        # print( "mask_samp ---->", mask_samp)
+                    loss_d = -torch.mean(mask_samp*torch.log(d_prob+1e-8) + (1-mask_samp)*torch.log(1-d_prob + 1e-8))
+                    
+                    # loss_d = -torch.mean(mask_samp*torch.log(d_prob+1e-8) - (1-mask_samp)*torch.log(1-d_prob + 1e-8))
+                    
                     optimizerD.zero_grad()
                     # pen.backward(retain_graph=True) # check if penalty is necessary 
                     loss_d.backward()
@@ -523,7 +569,7 @@ class CTGAIN(BaseSynthesizer):
                 #           torch.from_numpy(x_hat).to(self._device)
                 
                 fakeact = self._apply_activate(x_hat)
-
+                
                 if c1 is not None:
                     d_prob = discriminator(torch.cat([fakeact, c1], dim=1), mask=mask_samp)
                 else:
@@ -534,9 +580,13 @@ class CTGAIN(BaseSynthesizer):
                 else:
                     cross_entropy = self._cond_loss(fake, c1, m1)
 
+                # g_loss = -torch.mean((1-mask_samp) * torch.log(d_prob + 1e-8))
+                
                 g_loss = -torch.mean((1-mask_samp) * torch.log(d_prob + 1e-8))
+                
                 mse_loss = torch.mean(torch.pow((mask_samp * random_combined - mask_samp*sample), 2)) / torch.mean(mask_samp)  
-
+                
+                
                 generator_loss = g_loss + self.alpha * mse_loss
 
                 optimizerG.zero_grad()
@@ -574,9 +624,11 @@ class CTGAIN(BaseSynthesizer):
         # else:
         #     global_condition_vec = None
 
-        dta, mask_samp=self._transformer.tansform(incomp_data)
+        dta, mask_samp=self._transformer.transform(incomp_data)
         n=dta.shape[0]
-
+        dta, mask_samp= torch.from_numpy(dta).\
+            to(self._device), torch.from_numpy(mask_samp).to(self._device)
+        
         # steps = n // self._batch_size + 1
         # data = []
         # for i in range(steps):
@@ -584,13 +636,15 @@ class CTGAIN(BaseSynthesizer):
         #     # std = mean + 1
         #     # fakez = torch.normal(mean=mean, std=std).to(self._device)
             
-
-        sample, random_combined, x_hat = self._generator()
+        # mask_samp=torch.from_numpy(mask_samp).to(torch.float64).to(self._device)
+        print(mask_samp.shape, dta.shape)
+        print(dta.dtype, mask_samp.dtype)
+        sample, random_combined, x_hat = self._generator(dta, mask_samp, pred=True)
         fakeact = self._apply_activate(x_hat)
 
         # data.append(fakeact.detach().cpu().numpy())
         data=fakeact.detach().cpu().numpy()
-
+        print("data before transformation----- >",data)
         # data = np.concatenate(data, axis=0)
         # data = data[:n]
 
