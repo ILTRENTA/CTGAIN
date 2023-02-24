@@ -25,10 +25,10 @@ torch.manual_seed(0)
 class Discriminator(Module):
     """Discriminator for the CTGAN."""
 
-    def __init__(self, input_dim, discriminator_dim, device, pac=10, h_dim=32,hint_rate=.8):
+    def __init__(self, input_dim, discriminator_dim, device, pac=1, h_dim=32,hint_rate=.8):
         super(Discriminator, self).__init__()
         self._device=device
-        dim = input_dim * pac * 2 #include the mask vector 
+        dim = input_dim * pac #include the mask vector 
         self.pac = pac
         self.hint_rate=.7
 
@@ -36,12 +36,16 @@ class Discriminator(Module):
         self.uniform = torch.distributions.Uniform(low=0, high=1.)
         self.pacdim = dim
         seq = []
+        print(dim)
+        seq+=[Linear(dim, dim), LeakyReLU(.2), Dropout(.5)]
+
         for item in list(discriminator_dim):
             seq += [Linear(dim, item), LeakyReLU(0.2), Dropout(0.5)]
             dim = item
         seq += [Linear(dim, dim), LeakyReLU(.2), Dropout(.5)]
 
-        seq += [Linear(dim, input_dim), nn.Sigmoid()]# before was set to 74
+        seq += [Linear(dim, input_dim ),
+                 nn.Sigmoid()]  # before was set to 74
         self.seq = Sequential(*seq)
 
     def calc_gradient_penalty(self, real_data, fake_data, device='cpu', pac=10, lambda_=10):
@@ -69,12 +73,13 @@ class Discriminator(Module):
         """Apply the Discriminator to the `input_`."""
         assert input_.size()[0] % self.pac == 0
         x_hat=input_
-        # print(input_.shape)
+        
         hint = (self.uniform.sample([mask.shape[0], mask.shape[1]]) < self.hint_rate).float().to(self._device)
         hint = mask * hint ## the size of the hint matrix is wrong 
         
         
         inp = torch.cat([x_hat, hint], dim=1)
+        
         # print( "#### 78 ####line ----->",inp.view(-1, self.pacdim).shape)
         
         return self.seq(inp)#.view(-1, self.pacdim))
@@ -523,9 +528,9 @@ class CTGAIN(BaseSynthesizer):
                         print("mask_samp ---->", mask_samp)
                         print( torch.log(d_prob+1e-7))
                         first=False
-                        # print( "d_prob ---->", d_prob)
+                        print( "d_prob ---->", d_prob.shape)
 
-                        # print( "mask_samp ---->", mask_samp)
+                        print( "mask_samp ---->", mask_samp.shape)
                     loss_d = -torch.mean(mask_samp*torch.log(d_prob+1e-8) + (1-mask_samp)*torch.log(1-d_prob + 1e-8))
                     
                     # loss_d = -torch.mean(mask_samp*torch.log(d_prob+1e-8) - (1-mask_samp)*torch.log(1-d_prob + 1e-8))
@@ -571,9 +576,11 @@ class CTGAIN(BaseSynthesizer):
                 fakeact = self._apply_activate(x_hat)
                 
                 if c1 is not None:
-                    d_prob = discriminator(torch.cat([fakeact, c1], dim=1), mask=mask_samp)
+                    d_prob = discriminator(torch.cat([fakeact, c1], dim=1),
+                                            mask=mask_samp)
                 else:
-                    d_prob = discriminator(fakeact, mask=mask_samp)
+                    d_prob = discriminator(fakeact,
+                                            mask=mask_samp)
 
                 if condvec is None:
                     cross_entropy = 0
@@ -598,7 +605,7 @@ class CTGAIN(BaseSynthesizer):
                       f'Loss D: {loss_d.detach().cpu(): .4f}',
                       flush=True)
     @random_state
-    def impute(self, incomp_data):#condition_column=None, condition_value=None
+    def impute(self, incomp_data, real_only=True):#condition_column=None, condition_value=None
         """Sample data similar to the training data.
 
         Choosing a condition_column and condition_value will increase the probability of the
@@ -648,7 +655,21 @@ class CTGAIN(BaseSynthesizer):
         # data = np.concatenate(data, axis=0)
         # data = data[:n]
 
-        return self._transformer.inverse_transform(data)
+        if real_only:
+            dta=self._transformer.inverse_transform(data)
+            
+            
+            #dta=incomp_data+incomp_data.isnull().astype(int)*dta
+            
+            for col in incomp_data.columns:
+                print(col)
+                incomp_data.loc[incomp_data[col].isna(), col]=dta.loc[incomp_data[col].isna(),
+                                                                 col]
+            
+
+            return incomp_data
+        else:
+            return self._transformer.inverse_transform(data)
 
 
 
