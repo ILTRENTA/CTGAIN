@@ -36,7 +36,7 @@ class Discriminator(Module):
         self.uniform = torch.distributions.Uniform(low=0, high=1.)
         self.pacdim = dim
         seq = []
-        print(dim)
+        # print(dim)
         seq+=[Linear(dim, dim), LeakyReLU(.2), Dropout(.5)]
 
         for item in list(discriminator_dim):
@@ -180,7 +180,9 @@ class Generator(Module):
         #     print( mask.shape, z.shape)
         # if type(mask)==np.ndarray:
         #     mask=torch.from_numpy(mask).to(self._device)                     
-    
+        z=z.to(self._device)
+        mask=mask.to(self._device)
+        data_norm.to(self._device)
         random_combined = mask * data_norm + (1-mask) * z
         # if type(random_combined)==np.ndarray:
         #     print( type(random_combined), type(mask))
@@ -189,12 +191,7 @@ class Generator(Module):
         # if random_combined.dtype!= mask.dtype:
         #     random_combined=random_combined.type(mask.dtype)
 
-        if pred:
-            print("line 129 ----> random combined shape: ", random_combined.dtype)
-            print("line 130 ----> mask shape: ", mask.dtype)
-            mask=mask.to(torch.float32)
-            random_combined=random_combined.to(torch.float32)
-            print("line 130 ----> mask shape: ", mask.dtype)
+      
 
         xoxo=torch.cat([random_combined, mask], dim=1)
         if pred:
@@ -291,7 +288,7 @@ class CTGAIN(BaseSynthesizer):
         elif isinstance(cuda, str):
             device = cuda
         else:
-            device = 'cpu' ######################################################### HERE
+            device = 'cuda' ######################################################### HERE
 
         self._device = torch.device(device)
 
@@ -431,7 +428,7 @@ class CTGAIN(BaseSynthesizer):
 
         train_data, mask = self._transformer.transform(train_data)
 
-        train_data, mask= torch.from_numpy(train_data).float(), torch.from_numpy(mask).float()
+        train_data, mask= torch.from_numpy(train_data).float().to(self._device), torch.from_numpy(mask).float().to(self._device)
 
         self._data_sampler = DataSampler(
             train_data, mask, 
@@ -481,6 +478,9 @@ class CTGAIN(BaseSynthesizer):
                     if condvec is None:
                         c1, m1, col, opt = None, None, None, None
                         real, mask_samp = self._data_sampler.sample_data(self._batch_size, col, opt)
+                        real, mask_samp= real.to(self._device),\
+                            mask_samp.to(self._device)
+                        
                         # print("cond 1 ")
                     else:
                         c1, m1, col, opt = condvec
@@ -493,6 +493,8 @@ class CTGAIN(BaseSynthesizer):
                         real, mask_samp = self._data_sampler.sample_data(
                             self._batch_size, col[perm], opt[perm])
                         c2 = c1[perm]
+                        
+                        real, mask_samp=real.to(self._device), mask_samp.to(self._device)
                         # print("cond 2")
                         # real, mask_samp= torch.from_numpy(real.astype('float32')).to(self._device),\
                         #     torch.from_numpy(mask_samp).to(self._device)
@@ -521,16 +523,16 @@ class CTGAIN(BaseSynthesizer):
                     #     real_cat, fake_cat, self._device, self.pac)
                     # print("dprob --- >",d_prob.shape)
                     # print("mask_samp ---->", mask_samp.shape)
-                    if first:
-                        print("real_cat ---->", real_cat)
-                        print("fake_cat ---->", fake_cat)
-                        print("d_prob ---->", d_prob)
-                        print("mask_samp ---->", mask_samp)
-                        print( torch.log(d_prob+1e-7))
-                        first=False
-                        print( "d_prob ---->", d_prob.shape)
+                    # if first:
+                    #     print("real_cat ---->", real_cat)
+                    #     print("fake_cat ---->", fake_cat)
+                    #     print("d_prob ---->", d_prob)
+                    #     print("mask_samp ---->", mask_samp)
+                    #     print( torch.log(d_prob+1e-7))
+                    #     first=False
+                    #     print( "d_prob ---->", d_prob.shape)
 
-                        print( "mask_samp ---->", mask_samp.shape)
+                    #     print( "mask_samp ---->", mask_samp.shape)
                     loss_d = -torch.mean(mask_samp*torch.log(d_prob+1e-8) + (1-mask_samp)*torch.log(1-d_prob + 1e-8))
                     
                     # loss_d = -torch.mean(mask_samp*torch.log(d_prob+1e-8) - (1-mask_samp)*torch.log(1-d_prob + 1e-8))
@@ -644,14 +646,14 @@ class CTGAIN(BaseSynthesizer):
         #     # fakez = torch.normal(mean=mean, std=std).to(self._device)
             
         # mask_samp=torch.from_numpy(mask_samp).to(torch.float64).to(self._device)
-        print(mask_samp.shape, dta.shape)
-        print(dta.dtype, mask_samp.dtype)
+        # print(mask_samp.shape, dta.shape)
+        # print(dta.dtype, mask_samp.dtype)
         sample, random_combined, x_hat = self._generator(dta, mask_samp, pred=True)
         fakeact = self._apply_activate(x_hat)
 
         # data.append(fakeact.detach().cpu().numpy())
         data=fakeact.detach().cpu().numpy()
-        print("data before transformation----- >",data)
+        # print("data before transformation----- >",data)
         # data = np.concatenate(data, axis=0)
         # data = data[:n]
 
@@ -662,7 +664,7 @@ class CTGAIN(BaseSynthesizer):
             #dta=incomp_data+incomp_data.isnull().astype(int)*dta
             
             for col in incomp_data.columns:
-                print(col)
+                # print(col)
                 incomp_data.loc[incomp_data[col].isna(), col]=dta.loc[incomp_data[col].isna(),
                                                                  col]
             

@@ -141,8 +141,6 @@ class DataSampler(object):
         idx = []
         for c, o in zip(col, opt):
             idx.append(np.random.choice(self._rid_by_cat_cols[c][o]))
-        print(self._data[idx])
-        print(self._mask[idx])
         
         return self._data[idx], self._mask[idx]
 
