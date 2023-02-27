@@ -14,7 +14,7 @@ from ctgain.data_sampler import DataSampler
 from ctgain.data_transformer import DataTransformer_with_masking_nas as DataTransformer
 from ctgain.data_transformer import *
 
-from ctgain.utils_ctgain import *
+from ctgain.utils.ctgain import *
 
 
 from ctgain.ctgan.synthesizers.base import BaseSynthesizer, random_state
@@ -101,7 +101,7 @@ class Residual(Module):
         # print(1)
         if pred:
             print(input_.dtype)
-            input_=input_.to(torch.float64)
+            input_=input_.to(torch.float32)#changed from float64
 
         out = self.fc(input_)
         out = self.bn(out)
@@ -190,9 +190,7 @@ class Generator(Module):
         #     mask=torch.from_numpy(mask).to(self._device)
         # if random_combined.dtype!= mask.dtype:
         #     random_combined=random_combined.type(mask.dtype)
-
-      
-
+        
         xoxo=torch.cat([random_combined, mask], dim=1)
         if pred:
 
@@ -635,8 +633,8 @@ class CTGAIN(BaseSynthesizer):
 
         dta, mask_samp=self._transformer.transform(incomp_data)
         n=dta.shape[0]
-        dta, mask_samp= torch.from_numpy(dta).\
-            to(self._device), torch.from_numpy(mask_samp).to(self._device)
+        dta, mask_samp= torch.from_numpy(dta).float().\
+            to(self._device), torch.from_numpy(mask_samp).float().to(self._device)
         
         # steps = n // self._batch_size + 1
         # data = []
@@ -671,7 +669,7 @@ class CTGAIN(BaseSynthesizer):
 
             return incomp_data
         else:
-            return self._transformer.inverse_transform(data)
+            return self._transformer.inverse_transform(data), sample, random_combined, x_hat
 
 
 
