@@ -10,3 +10,5 @@ branched from https://github.com/sdv-dev/CTGAN && https://github.com/sdv-dev/RDT
 MVBIN is from https://github.com/shz9/mvbin
 
 produce_NA and related funcionts in utils/ctgain.py are from https://rmisstastic.netlify.app/how-to/python/generate_html/how%20to%20generate%20missing%20values 
+
+GAIN metrics and related functions in utils/GAIN_metrics.py are from https://github.com/jsyoon0823/GAIN
