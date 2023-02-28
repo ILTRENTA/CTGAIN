@@ -1,5 +1,5 @@
 # CTGAIN thesis 
-THE CODE IS NOT WORKING YET AND COMES WITHOUT WARRANTY 
+THE CODE IS NOT WORKING YET AND COMES WITHOUT WARRANTY \n
 Implementation of missing value imputation with CTGAN using GAIN hint mechanism 
 
 Repository for my work on missing value imputation using a CTGAN with hint mechanism
