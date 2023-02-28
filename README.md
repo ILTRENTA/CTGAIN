@@ -6,3 +6,5 @@ Repository for my work on missing value imputation using a CTGAN with hint mecha
 branched from https://github.com/sdv-dev/CTGAN && https://github.com/sdv-dev/RDT
 
 MVBIN is from https://github.com/shz9/mvbin
+
+produce_NA and related funcionts in utils/ctgain.py are from https://rmisstastic.netlify.app/how-to/python/generate_html/how%20to%20generate%20missing%20values 
