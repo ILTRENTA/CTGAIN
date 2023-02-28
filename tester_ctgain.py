@@ -9,17 +9,17 @@ from ctgain.utils.ctgain import *
 from ctgain.utils.GAIN_metrics import *
 
 plt.style.use("ggplot")
-wine=load_wine()
+#wine=load_wine()
 
-data=pd.DataFrame(wine.data, columns=wine.feature_names)
-data.head()
+#data=pd.DataFrame(wine.data, columns=wine.feature_names)
+#data.head()
 
-data=pd.read_csv("datasets/clean_datasets/abalone.csv")
+data=pd.read_csv("datasets/abalone.csv")
 
 cols=data.columns
 
 
-trans_dta=produce_NA(data.values, p_miss=.2, p_obs=.2, mecha="MAR")
+#trans_dta=produce_NA(data.values, p_miss=.2, p_obs=.2, mecha="MAR")
 
 
 trans_dta=produce_NA(data.values, p_miss=.4, mecha="MCAR")
