@@ -371,7 +371,7 @@ class CTGAIN_v2(BaseSynthesizer):
             data_dim, 
             nan_mask.shape[1],self._device
         ).to(self._device)
-        print(self.pac)
+        
         
         discriminator = Discriminator(
             data_dim + self._data_sampler.dim_cond_vec(),
@@ -396,8 +396,10 @@ class CTGAIN_v2(BaseSynthesizer):
 
         steps_per_epoch = max(len(train_data) // self._batch_size, 1)
         first=True
-        # for i in tqdm(range(epochs)):
-        for i in range(epochs):
+        history=[]
+
+        for i in tqdm(range(epochs)):
+        #for i in range(epochs):
             
             for id_ in range(steps_per_epoch):
                 
@@ -556,10 +558,20 @@ class CTGAIN_v2(BaseSynthesizer):
                 generator_loss.backward()
                 optimizerG.step()
 
+                history.append([generator_loss.detach().cpu().numpy(),
+                                loss_d.detach().cpu().numpy(), mse_loss.detach().cpu().numpy(),
+                                  g_loss.detach().cpu().numpy()])
+                
+
             if self._verbose:
                 print(f'Epoch {i+1}, Loss G: {generator_loss.detach().cpu(): .4f},',  # noqa: T001
                       f'Loss D: {loss_d.detach().cpu(): .4f}', f" g_loss mse comp  {mse_loss.detach().cpu(): .4f} {g_loss.detach().cpu(): .4f}",
                       flush=True)
+        history=pd.DataFrame(history, columns=['generator_loss', 'discriminator_loss', 'mse_loss', 'g_loss'])
+
+
+        return history
+    
     @random_state
     def impute(self, incomp_data, real_only=True):#condition_column=None, condition_value=None
         """Sample data similar to the training data.
