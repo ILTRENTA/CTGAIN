@@ -631,7 +631,7 @@ class CTGAIN_v2(BaseSynthesizer):
         # data = np.concatenate(data, axis=0)
         # data = data[:n]
         mask_samp=mask_samp.detach().cpu().numpy()
-        random_comnbined=random_comnined.detach().cpu().numpy()
+        random_comnbined=random_combined.detach().cpu().numpy()
 
         if real_only:
             data=(1-mask_samp)*data+(mask_samp)*random_combined
