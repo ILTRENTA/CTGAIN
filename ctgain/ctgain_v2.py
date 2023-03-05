@@ -222,6 +222,11 @@ class CTGAIN_v2(BaseSynthesizer):
 
                         tmp= functional.cross_entropy(
                             x[:, st:ed], torch.argmax(recon_x[:, st:ed], dim=1), reduction='sum')
+                        
+                        ## Added the masked cross entropy loss 
+                        
+                        tmp = tmp * originalMask   
+                        tmp = tmp.sum() / originalMask.sum()
                         loss.append(tmp)
 
                     # else: 
@@ -625,10 +630,11 @@ class CTGAIN_v2(BaseSynthesizer):
         # print("data before transformation----- >",data)
         # data = np.concatenate(data, axis=0)
         # data = data[:n]
-        
+        mask_samp=mask_samp.detach().cpu().numpy()
+        random_comnined=random_comnined.detach().cpu().numpy()
 
         if real_only:
-            data=(1-mask_samp)*data+(mask_samp)*random_combined.detach().cpu().numpy()
+            data=(1-mask_samp)*data+(mask_samp)*random_combined
             dta=self._transformer.inverse_transform(data)
             
             
