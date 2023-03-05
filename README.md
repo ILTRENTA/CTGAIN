@@ -1,6 +1,11 @@
 # CTGAIN thesis 
-THE CODE IS NOT WORKING YET AND COMES WITHOUT WARRANTY
+THE CODE COMES WITHOUT WARRANTY
 
+The model is now able to impute, I added a colab notebook to experiment with it. 
+
+I must point out that the results I'm obtaining are poor in compare to other imputation models. But it isn't yet finalized.
+
+Also, I'm working on a Pytorch 2.0 implementation, which should speed up the code a little.  
 
 Implementation of missing value imputation with CTGAN using GAIN hint mechanism 
 
