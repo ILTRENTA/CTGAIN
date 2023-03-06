@@ -563,10 +563,10 @@ class CTGAIN_v2(BaseSynthesizer):
                 generator_loss.backward()
                 optimizerG.step()
 
-                history.append([generator_loss.detach().cpu().numpy(),
-                                loss_d.detach().cpu().numpy(), mse_loss.detach().cpu().numpy(),
-                                  g_loss.detach().cpu().numpy()])
-                
+            history.append([generator_loss.detach().cpu().numpy(),
+                            loss_d.detach().cpu().numpy(), mse_loss.detach().cpu().numpy(),
+                              g_loss.detach().cpu().numpy()])
+
 
             if self._verbose:
                 print(f'Epoch {i+1}, Loss G: {generator_loss.detach().cpu(): .4f},',  # noqa: T001
