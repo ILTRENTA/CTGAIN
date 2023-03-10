@@ -30,7 +30,7 @@ class Discriminator(Module):
 
         dim = (input_dim+nan_mask_dim) #* pac #include the mask vector 
         self.pac = pac
-        self.hint_rate=.7
+        self.hint_rate=hint_rate
 
         self.h_dim=h_dim
 
